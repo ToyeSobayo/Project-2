@@ -13,7 +13,10 @@ def loadTsDatabase(filename):
             parts = line.split()
             if len(parts) == 2:
                 domain, ip = parts
-                mapping[domain.lower()] = ip
+                #when returning domain names in responses, 
+                #we should return the original case as stored in the database 
+                # for case-insensitive lookups
+                mapping[domain.lower()] = (domain, ip)
             else:
                 print("Error: Unexpeced format", line)
     
@@ -57,14 +60,20 @@ def ts1():
                 
                 domain = parts[1]
                 id = parts[2]
+                # Look up using lowercase, but retrieve original case if found
 
-                ip = tsDB.get(domain.lower(), None)
+                #ip = tsDB.get(domain.lower(), None)
+                # Lookup domain name case-insensitive
+                ip = tsDB.get(domain.lower())
                 if ip:
+                    og_domain, ip = ip
                     flag = "aa"
                 else:
+                    og_domain = domain
                     ip = "0.0.0.0"
                     flag = "nx"
-                response = f"1 {domain} {ip} {id} {flag}\n"
+                #response = f"1 {domain} {ip} {id} {flag}\n"
+                response = f"1 {og_domain} {ip} {id} {flag}\n"
                 csockid.send(response.encode('utf-8'))
 
                 file.write(response)
