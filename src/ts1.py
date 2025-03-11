@@ -14,8 +14,8 @@ def loadTsDatabase(filename):
             if len(parts) == 2:
                 domain, ip = parts
                 mapping[domain.lower()] = ip
-        else:
-            print("Error: Unexpeced format", line)
+            else:
+                print("Error: Unexpeced format", line)
     
     return mapping
 
@@ -72,7 +72,7 @@ def ts1():
 
                 csockid.close()
             except socket.error as e:
-                print("ts1 socker error:", e)
+                print("ts1 socket error:", e)
                 break
     ss.close()
 
