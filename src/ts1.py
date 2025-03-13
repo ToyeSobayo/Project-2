@@ -44,6 +44,7 @@ def ts1():
     ss.listen(5)
     print("TS1 is up on port", port)
     
+    print('hi')
     with open("../testcases/ts1responses.txt", "w") as file:
         while True:
             try:

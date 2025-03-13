@@ -1,11 +1,6 @@
 import sys
 import socket
 
-# Global variables for override mode
-override_ts = False
-ts_override_ip = None
-ts_port_map = {}  # Maps original TS hostnames (from rsdatabase.txt) to port numbers
-
 def loadRsDatabase(filename):
     tldMap = {}
     directMap = {}
@@ -41,10 +36,10 @@ def loadRsDatabase(filename):
     
     return tldMap, directMap
 
-def forwardToTS(ts_hostname, ts_port, query):
+def forwardToTS(ts_hostname, port, query):
     try:
         ts_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        ts_sock.connect((ts_hostname, ts_port))
+        ts_sock.connect((ts_hostname, port))
         ts_sock.send(query.encode('utf-8'))
         response = ts_sock.recv(1024).decode('utf-8').strip()
         ts_sock.close()
@@ -62,29 +57,14 @@ def processQuery(query, tldMap, directMap):
     
     # Check if the domain falls under a delegated TLD.
     for key in tldMap:
-        tld, orig_ts_hostname = tldMap[key]
+        tld, ts_hostname = tldMap[key]
         if domain_lower.endswith(tld):
-            # If iterative query, RS returns an NS response.
             if qflag == "it":
-                # In override mode, use the provided TS IP and ignore port since iterative response is just a pointer.
-                if override_ts:
-                    ts_hostname = ts_override_ip
-                else:
-                    ts_hostname = orig_ts_hostname
+                # Iterative: RS returns NS response pointing to TS server.
                 return f"1 {domain} {ts_hostname} {ident} ns"
             elif qflag == "rd":
-                # For recursive queries, RS forwards the query to the TS server.
-                if override_ts:
-                    ts_hostname = ts_override_ip
-                    # Get the appropriate port from our mapping.
-                    if orig_ts_hostname in ts_port_map:
-                        ts_port = ts_port_map[orig_ts_hostname]
-                    else:
-                        ts_port = port  # fallback
-                else:
-                    ts_hostname = orig_ts_hostname
-                    ts_port = port
-                tsResponse = forwardToTS(ts_hostname, ts_port, query)
+                # Recursive: RS forwards the query to the TS server.
+                tsResponse = forwardToTS(ts_hostname, port, query)
                 if tsResponse:
                     ts_parts = tsResponse.split()
                     if len(ts_parts) == 5 and ts_parts[4] == "aa":
@@ -95,7 +75,7 @@ def processQuery(query, tldMap, directMap):
                     return f"1 {domain} 0.0.0.0 {ident} nx"
             else:
                 return f"1 {domain} 0.0.0.0 {ident} nx"
-    # If not delegated, RS attempts a direct lookup.
+    # Direct lookup at RS.
     if domain_lower in directMap:
         ip = directMap[domain_lower]
         return f"1 {domain} {ip} {ident} aa"
@@ -103,27 +83,11 @@ def processQuery(query, tldMap, directMap):
         return f"1 {domain} 0.0.0.0 {ident} nx"
 
 def server():
-    global override_ts, ts_override_ip, ts_port_map
     try:
         tldMap, directMap = loadRsDatabase("../testcases/rsdatabase.txt")
     except Exception as e:
         print("Error loading RS database:", e)
         sys.exit(1)
-    
-    # Check for optional override flag.
-    # Usage: python3 rs.py <rudns_port> [--overrideTS <ts_override_ip>]
-    if len(sys.argv) == 4 and sys.argv[2] == "--overrideTS":
-        override_ts = True
-        ts_override_ip = sys.argv[3]
-        # For local testing on separate machines: assume TS1 runs on port 45001, TS2 on port 45002.
-        # The RS database originally lists TS hostnames as "java.cs.rutgers.edu" for TS1 and "cheese.cs.rutgers.edu" for TS2.
-        ts_port_map = {
-            "java.cs.rutgers.edu": 45001, 
-            "cheese.cs.rutgers.edu": 45002
-        }
-        # Override the TS hostnames in tldMap to use the provided override IP.
-        tldMap['ts1'] = (tldMap['ts1'][0], ts_override_ip)
-        tldMap['ts2'] = (tldMap['ts2'][0], ts_override_ip)
     
     print("Server is running on port", port)
     print("TLD Mapping", tldMap)
@@ -178,8 +142,8 @@ def server():
         print("Server closed on port", port)
 
 if __name__ == "__main__":
-    if len(sys.argv) < 2:
-        print("Usage: python3 {} <rudns_port> [--overrideTS <ts_override_ip>]".format(sys.argv[0]))
+    if len(sys.argv) != 2:
+        print("Usage: python3 {} <rudns_port>".format(sys.argv[0]))
         sys.exit(1)
     try:
         port = int(sys.argv[1])
