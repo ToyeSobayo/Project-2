@@ -38,7 +38,6 @@ def loadRsDatabase(filename):
     return tldMap, directMap
 
 def forwardToTS(ts_hostname, port, query):
-    """Forward the query to the given TS server and return its response."""
     try:
         ts_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         ts_sock.connect((ts_hostname, port))
