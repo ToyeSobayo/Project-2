@@ -64,13 +64,13 @@ def processQuery(query, tldMap, directMap, port):
             if qflag == "it":
                 return f"1 {domain} {ts_hostname} {ident} ns"
             elif qflag == "rd":
-                ts_response = forwardToTS(ts_hostname, port, query)
-                if ts_response:
-                    ts_parts = ts_response.split()
+                tsResponse = forwardToTS(ts_hostname, port, query)
+                if tsResponse:
+                    ts_parts = tsResponse.split()
                     if len(ts_parts) == 5 and ts_parts[4] == "aa":
                         ts_parts[4] = "ra"
-                        ts_response = " ".join(ts_parts)
-                    return ts_response
+                        tsResponse = " ".join(ts_parts)
+                    return tsResponse
                 else:
                     return f"1 {domain} 0.0.0.0 {ident} nx"
             else:
