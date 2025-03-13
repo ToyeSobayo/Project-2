@@ -46,11 +46,21 @@ def client():
                 # Write response to output file
                 output_file.write(f"{response}\n")
                 output_file.flush()
+                
                 # Check if we need to contact a TLD server (iterative query)
                 if resp_flag == "ns":
-                    # Get TLD server hostname from the response
+                    # Get TLD server hostname from the response (for local testing, likely "localhost")
                     tld_hostname = ip
                     
+                    # Determine the appropriate port based on the queried domain's TLD
+                    # For local testing: TS1 on port 45001 for .com, TS2 on port 45002 for .edu
+                    if hostname.lower().endswith("edu"):
+                        tld_port = 45002
+                    elif hostname.lower().endswith("com"):
+                        tld_port = 45001
+                    else:
+                        tld_port = port  # fallback if unknown TLD
+                        
                     # Increment identification for new query
                     identification += 1
                     
@@ -60,7 +70,7 @@ def client():
                     # Connect to TLD server
                     try:
                         tld_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-                        tld_socket.connect((tld_hostname, port))
+                        tld_socket.connect((tld_hostname, tld_port))
                         tld_socket.send(tld_request.encode('utf-8'))
                         
                         # Receive response from TLD server
@@ -72,14 +82,14 @@ def client():
                         output_file.flush()
                         
                     except socket.error as e:
-                        print(f"Error connecting to TLD server {tld_hostname}: {e}")
+                        print(f"Error connecting to TLD server {tld_hostname} on port {tld_port}: {e}")
                 
             except socket.error as e:
                 print(f"Error connecting to root server {rsHostName}: {e}")
 
             # Increment identification for next query
             identification += 1    
-            #by this time it shold be able to resolve the hostname to the ip address
+            # by this time it should be able to resolve the hostname to the IP address
     print("Client connecting to server", rsHostName, "on port: ", port)
 
 if __name__ == "__main__":

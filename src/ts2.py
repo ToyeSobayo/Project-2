@@ -2,7 +2,6 @@ import sys
 import socket
 
 def loadTsDatabase(filename):
-
     mapping = {}
     
     with open(filename, 'r') as f:
@@ -13,14 +12,14 @@ def loadTsDatabase(filename):
             parts = line.split()
             if len(parts) == 2:
                 domain, ip = parts
-                mapping[domain.lower()] = ip
+                # Store a tuple with the original domain (preserving case) and its IP
+                mapping[domain.lower()] = (domain, ip)
             else:
-                print("Error: Unexpeced format", line)
+                print("Error: Unexpected format", line)
     
     return mapping
 
 def ts2():
-
     tsDB = loadTsDatabase("../testcases/ts2database.txt")
     print("ts2 db loaded:", tsDB)
 
@@ -56,15 +55,17 @@ def ts2():
                     continue
                 
                 domain = parts[1]
-                id = parts[2]
+                req_id = parts[2]
 
-                ip = tsDB.get(domain.lower(), None)
-                if ip:
+                entry = tsDB.get(domain.lower())
+                if entry:
+                    og_domain, ip = entry
                     flag = "aa"
                 else:
+                    og_domain = domain
                     ip = "0.0.0.0"
                     flag = "nx"
-                response = f"1 {domain} {ip} {id} {flag}\n"
+                response = f"1 {og_domain} {ip} {req_id} {flag}\n"
                 csockid.send(response.encode('utf-8'))
 
                 file.write(response)
