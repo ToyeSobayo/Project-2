@@ -2,7 +2,6 @@ import sys
 import socket
 
 def loadTsDatabase(filename):
-
     mapping = {}
     
     with open(filename, 'r') as f:
@@ -13,75 +12,77 @@ def loadTsDatabase(filename):
             parts = line.split()
             if len(parts) == 2:
                 domain, ip = parts
-                #when returning domain names in responses, 
-                #we should return the original case as stored in the database 
-                # for case-insensitive lookups
+                # Return original case for the domain along with its IP.
                 mapping[domain.lower()] = (domain, ip)
             else:
-                print("Error: Unexpeced format", line)
+                print("Error: Unexpected format", line)
     
     return mapping
 
 def ts1():
-
     tsDB = loadTsDatabase("../testcases/ts1database.txt")
-    print("ts1 db loaded:", tsDB)
-
+    print("TS1 database loaded:", tsDB)
+    
+    # Print the actual hostname and IP of TS1 to verify network configuration.
+    actual_hostname = socket.gethostname()
+    try:
+        actual_ip = socket.gethostbyname(actual_hostname)
+    except Exception as e:
+        actual_ip = "Unknown"
+    print("TS1 running on hostname:", actual_hostname)
+    print("TS1 IP address:", actual_ip)
+    
     try:
         ss = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         ss.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     except socket.error as err:
         print("Socket open error:", err)
         sys.exit(1)
-
+    
     serverBinding = ('', port)
     ss.bind(serverBinding)
     ss.listen(5)
-    print("ts1 up on port", port)
-
+    print("TS1 is up on port", port)
+    
     with open("../testcases/ts1responses.txt", "w") as file:
         while True:
             try:
                 csockid, addr = ss.accept()
-                print("ts1: Got connection from", addr)
-
+                print("TS1: Got connection from", addr)
+                
                 request = csockid.recv(1024).decode('utf-8').strip()
                 if not request:
                     csockid.close()
                     continue
-
-                print("ts1: request:", request)
-
+                
+                print("TS1: Received request:", request)
+                
                 parts = request.split()
                 if len(parts) != 4:
-                    print("ts1: invalid request format")
+                    print("TS1: Invalid request format")
                     csockid.close()
                     continue
                 
                 domain = parts[1]
-                id = parts[2]
-                # Look up using lowercase, but retrieve original case if found
-
-                #ip = tsDB.get(domain.lower(), None)
-                # Lookup domain name case-insensitive
-                ip = tsDB.get(domain.lower())
-                if ip:
-                    og_domain, ip = ip
+                req_id = parts[2]
+                
+                entry = tsDB.get(domain.lower())
+                if entry:
+                    og_domain, ip = entry
                     flag = "aa"
                 else:
                     og_domain = domain
                     ip = "0.0.0.0"
                     flag = "nx"
-                #response = f"1 {domain} {ip} {id} {flag}\n"
-                response = f"1 {og_domain} {ip} {id} {flag}\n"
+                response = f"1 {og_domain} {ip} {req_id} {flag}\n"
                 csockid.send(response.encode('utf-8'))
-
+                
                 file.write(response)
                 file.flush()
-
+                
                 csockid.close()
             except socket.error as e:
-                print("ts1 socket error:", e)
+                print("TS1 socket error:", e)
                 break
     ss.close()
 
@@ -95,5 +96,5 @@ if __name__ == "__main__":
     except ValueError:
         print("Invalid port number")
         sys.exit(1)
-
+    
     ts1()
