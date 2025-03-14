@@ -76,6 +76,7 @@ def ts1():
                     ip = "0.0.0.0"
                     flag = "nx"
                 response = f"1 {og_domain} {ip} {req_id} {flag}\n"
+
                 csockid.send(response.encode('utf-8'))
                 
                 file.write(response)

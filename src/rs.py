@@ -1,28 +1,26 @@
 import sys
 import socket
 
+# Global flag and dictionary for local testing mode.
+local_testing = False
+ts_ports = {}  # For local testing: maps TS keys to port numbers.
+
 def loadRsDatabase(filename):
     tldMap = {}
     directMap = {}
     with open(filename, 'r') as f:
         lines = f.readlines()
-    
     if len(lines) < 2:
         raise Exception("File must have at least two lines for TLD mapping")
-    
     ts1Line = lines[0].strip()
     ts2Line = lines[1].strip()
-    
     ts1Parts = ts1Line.split()
     ts2Parts = ts2Line.split()
-    
     if len(ts1Parts) != 2 or len(ts2Parts) != 2:
         raise Exception("First two lines must contain exactly two values")
-    
-    # tldMap stores a tuple: (TLD, TS hostname)
+    # tldMap stores (tld, TS hostname)
     tldMap['ts1'] = (ts1Parts[0].lower(), ts1Parts[1])
     tldMap['ts2'] = (ts2Parts[0].lower(), ts2Parts[1])
-    
     for line in lines[2:]:
         line = line.strip()
         if line == "":
@@ -33,13 +31,12 @@ def loadRsDatabase(filename):
             directMap[domain.lower()] = ip
         else:
             print("Error: Unexpected format", line)
-    
     return tldMap, directMap
 
-def forwardToTS(ts_hostname, port, query):
+def forwardToTS(ts_hostname, ts_port, query):
     try:
         ts_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        ts_sock.connect((ts_hostname, port))
+        ts_sock.connect((ts_hostname, ts_port))
         ts_sock.send(query.encode('utf-8'))
         response = ts_sock.recv(1024).decode('utf-8').strip()
         ts_sock.close()
@@ -48,7 +45,7 @@ def forwardToTS(ts_hostname, port, query):
         print("Error forwarding query to TS server", ts_hostname, ":", e)
         return None
 
-def processQuery(query, tldMap, directMap):
+def processQuery(query, tldMap, directMap, common_port):
     parts = query.split()
     if len(parts) != 4:
         return None
@@ -60,13 +57,30 @@ def processQuery(query, tldMap, directMap):
         tld, ts_hostname = tldMap[key]
         if domain_lower.endswith(tld):
             if qflag == "it":
-                # Iterative: RS returns NS response pointing to TS server.
+                # Iterative: RS returns NS response with the TS hostname.
+                if local_testing:
+                    # Use localhost and the TS port from ts_ports.
+                    if key in ts_ports:
+                        ts_hostname = "localhost"
+                        ts_port = ts_ports[key]
+                    else:
+                        ts_port = common_port
+                else:
+                    ts_port = common_port
                 return f"1 {domain} {ts_hostname} {ident} ns"
             elif qflag == "rd":
-                # Recursive: RS forwards the query to the TS server.
-                tsResponse = forwardToTS(ts_hostname, port, query)
+                if local_testing:
+                    if key in ts_ports:
+                        ts_hostname = "localhost"
+                        ts_port = ts_ports[key]
+                    else:
+                        ts_port = common_port
+                else:
+                    ts_port = common_port
+                tsResponse = forwardToTS(ts_hostname, ts_port, query)
                 if tsResponse:
                     ts_parts = tsResponse.split()
+                    # If TS returns an authoritative answer, RS changes flag to ra.
                     if len(ts_parts) == 5 and ts_parts[4] == "aa":
                         ts_parts[4] = "ra"
                         tsResponse = " ".join(ts_parts)
@@ -75,7 +89,7 @@ def processQuery(query, tldMap, directMap):
                     return f"1 {domain} 0.0.0.0 {ident} nx"
             else:
                 return f"1 {domain} 0.0.0.0 {ident} nx"
-    # Direct lookup at RS.
+    # If not delegated, RS attempts a direct lookup.
     if domain_lower in directMap:
         ip = directMap[domain_lower]
         return f"1 {domain} {ip} {ident} aa"
@@ -83,11 +97,22 @@ def processQuery(query, tldMap, directMap):
         return f"1 {domain} 0.0.0.0 {ident} nx"
 
 def server():
+    global local_testing, ts_ports
     try:
         tldMap, directMap = loadRsDatabase("../testcases/rsdatabase.txt")
     except Exception as e:
         print("Error loading RS database:", e)
         sys.exit(1)
+    
+    # Check for an optional local testing flag.
+    # Usage: python3 rs.py <port> [--local]
+    if len(sys.argv) == 3 and sys.argv[2] == "--local":
+        local_testing = True
+        # For local testing, we assume TS1 runs on port 45001 and TS2 on port 45002.
+        ts_ports = {'ts1': 45001, 'ts2': 45002}
+        # Override TS hostnames to 'localhost'
+        tldMap['ts1'] = (tldMap['ts1'][0], "localhost")
+        tldMap['ts2'] = (tldMap['ts2'][0], "localhost")
     
     print("Server is running on port", port)
     print("TLD Mapping", tldMap)
@@ -117,7 +142,7 @@ def server():
                 csockid.close()
                 continue
             
-            response = processQuery(query, tldMap, directMap)
+            response = processQuery(query, tldMap, directMap, port)
             if response is None:
                 parts = query.split()
                 if len(parts) >= 3:
@@ -142,8 +167,8 @@ def server():
         print("Server closed on port", port)
 
 if __name__ == "__main__":
-    if len(sys.argv) != 2:
-        print("Usage: python3 {} <rudns_port>".format(sys.argv[0]))
+    if len(sys.argv) < 2:
+        print("Usage: python3 {} <rudns_port> [--local]".format(sys.argv[0]))
         sys.exit(1)
     try:
         port = int(sys.argv[1])
