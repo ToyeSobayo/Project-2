@@ -35,7 +35,6 @@ def loadRsDatabase(filename):
     return tldMap, directMap
 
 def forwardToTS(tsHostname, tsPort, query):
-    """Send the query to TS server at (tsHostname, tsPort) over TCP."""
     try:
         tsSock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         tsSock.connect((tsHostname, tsPort))
@@ -50,11 +49,10 @@ def forwardToTS(tsHostname, tsPort, query):
 def processQuery(query, tldMap, directMap, common_port):
     parts = query.split()
     if len(parts) != 4:
-        return None  # Malformed
-
+        return None 
     qtype, domain, ident, qflag = parts
     domain_lower = domain.lower()
-
+    
     for key in tldMap:
         tld, tsHostname = tldMap[key]
         if domain_lower.endswith(tld):
