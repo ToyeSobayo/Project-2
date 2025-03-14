@@ -39,15 +39,19 @@ def client():
                 output.write(f"{response}\n")
                 output.flush()
                 
+                
                 if resFlag == "ns":
                     tldHostname = ip
                     
-                    if hostname.lower().endswith("edu"):
-                        tldPort = 45002
-                    elif hostname.lower().endswith("com"):
-                        tldPort = 45001
-                    else:
-                        tldPort = port
+                    # Local testing block
+                    # if hostname.lower().endswith("edu"):
+                    #     tldPort = 45002
+                    # elif hostname.lower().endswith("com"):
+                    #     tldPort = 45001
+                    # else:
+                    #     tldPort = port
+                    
+                    tldPort = port
 
                     idNum += 1
                     
