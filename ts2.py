@@ -12,7 +12,6 @@ def loadTsDatabase(filename):
             parts = line.split()
             if len(parts) == 2:
                 domain, ip = parts
-                # Store a tuple with the original domain (preserving case) and its IP
                 mapping[domain.lower()] = (domain, ip)
             else:
                 print("Error: Unexpected format", line)
@@ -20,7 +19,7 @@ def loadTsDatabase(filename):
     return mapping
 
 def ts2():
-    tsDB = loadTsDatabase("../testcases/ts2database.txt")
+    tsDB = loadTsDatabase("ts2database.txt")
     print("ts2 db loaded:", tsDB)
 
     try:
@@ -35,7 +34,7 @@ def ts2():
     ss.listen(5)
     print("ts2 up on port", port)
 
-    with open("../testcases/ts2responses.txt", "w") as file:
+    with open("ts2responses.txt", "w") as file:
         while True:
             try:
                 csockid, addr = ss.accept()
@@ -55,17 +54,17 @@ def ts2():
                     continue
                 
                 domain = parts[1]
-                req_id = parts[2]
+                reqId = parts[2]
 
                 entry = tsDB.get(domain.lower())
                 if entry:
-                    og_domain, ip = entry
+                    originalDomain, ip = entry
                     flag = "aa"
                 else:
-                    og_domain = domain
+                    originalDomain = domain
                     ip = "0.0.0.0"
                     flag = "nx"
-                response = f"1 {og_domain} {ip} {req_id} {flag}\n"
+                response = f"1 {originalDomain} {ip} {reqId} {flag}\n"
                 csockid.send(response.encode('utf-8'))
 
                 file.write(response)

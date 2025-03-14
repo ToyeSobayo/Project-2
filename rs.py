@@ -18,14 +18,12 @@ def loadRsDatabase(filename):
     if len(ts1Parts) != 2 or len(ts2Parts) != 2:
         raise Exception("First two lines must contain exactly two values")
 
-    # tldMap stores a tuple: (TLD, TS hostname)
-    tldMap['ts1'] = (ts1Parts[0].lower(), ts1Parts[1])
+    tldMap['ts1'] = (ts1Parts[0].lower(), ts1Parts[1])  
     tldMap['ts2'] = (ts2Parts[0].lower(), ts2Parts[1])
 
-    # Read any additional lines as direct mappings
     for line in lines[2:]:
         line = line.strip()
-        if line == "":
+        if not line:
             continue
         parts = line.split()
         if len(parts) == 2:
@@ -36,40 +34,48 @@ def loadRsDatabase(filename):
 
     return tldMap, directMap
 
-def forwardToTS(ts_hostname, common_port, query):
+def forwardToTS(tsHostname, tsPort, query):
+    """Send the query to TS server at (tsHostname, tsPort) over TCP."""
     try:
-        ts_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        ts_sock.connect((ts_hostname, common_port))
-        ts_sock.send(query.encode('utf-8'))
-        response = ts_sock.recv(1024).decode('utf-8').strip()
-        ts_sock.close()
+        tsSock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        tsSock.connect((tsHostname, tsPort))
+        tsSock.send(query.encode('utf-8'))
+        response = tsSock.recv(1024).decode('utf-8').strip()
+        tsSock.close()
         return response
     except Exception as e:
-        print("Error forwarding query to TS server", ts_hostname, ":", e)
+        print(f"Error with TS server {tsHostname}:{tsPort}: {e}")
         return None
 
 def processQuery(query, tldMap, directMap, common_port):
     parts = query.split()
     if len(parts) != 4:
-        return None
+        return None  # Malformed
 
     qtype, domain, ident, qflag = parts
     domain_lower = domain.lower()
 
-    # Check if the domain falls under a delegated TLD.
     for key in tldMap:
-        tld, ts_hostname = tldMap[key]
+        tld, tsHostname = tldMap[key]
         if domain_lower.endswith(tld):
             if qflag == "it":
-                # Iterative: RS returns NS response with the TS hostname from rsdatabase.txt.
-                return f"1 {domain} {ts_hostname} {ident} ns"
+                return f"1 {domain} {tsHostname} {ident} ns"
             elif qflag == "rd":
-                # Recursive: RS forwards the query to the TS server.
-                tsResponse = forwardToTS(ts_hostname, common_port, query)
+                # (COMMENTED-OUT EXAMPLE FOR LOCAL TESTING)
+                # if tsHostname == "localhost" and tld == "com":
+                #     tsPort = 45001
+                # elif tsHostname == "localhost" and tld == "edu":
+                #     tsPort = 45002
+                # else:
+                #     tsPort = common_port
+
+                tsPort = common_port
+                
+                tsResponse = forwardToTS(tsHostname, tsPort, query)
                 if tsResponse:
                     ts_parts = tsResponse.split()
                     if len(ts_parts) == 5 and ts_parts[4] == "aa":
-                        ts_parts[4] = "ra"  # Change authoritative answer to recursion available.
+                        ts_parts[4] = "ra"
                         tsResponse = " ".join(ts_parts)
                     return tsResponse
                 else:
@@ -77,24 +83,22 @@ def processQuery(query, tldMap, directMap, common_port):
             else:
                 return f"1 {domain} 0.0.0.0 {ident} nx"
 
-    # If not delegated, RS attempts a direct lookup in its own database.
     if domain_lower in directMap:
         ip = directMap[domain_lower]
         return f"1 {domain} {ip} {ident} aa"
     else:
         return f"1 {domain} 0.0.0.0 {ident} nx"
 
-def server():
+def server(port):
     try:
-        # Updated to load the database from current directory
         tldMap, directMap = loadRsDatabase("rsdatabase.txt")
     except Exception as e:
         print("Error loading RS database:", e)
         sys.exit(1)
 
-    print("Server is running on port", port)
-    print("TLD Mapping", tldMap)
-    print("Direct Mapping", directMap)
+    print("RS server is running on port", port)
+    print("TLD Mapping:", tldMap)
+    print("Direct Mapping:", directMap)
 
     try:
         ss = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -106,9 +110,9 @@ def server():
     serverBinding = ('', port)
     ss.bind(serverBinding)
     ss.listen(5)
-    print("Listening on port", port)
+    print(f"Listening on port {port}...")
 
-    log_file = open("rsresponses.txt", "w")
+    responseFile = open("rsresponses.txt", "w")
 
     try:
         while True:
@@ -134,27 +138,25 @@ def server():
 
             response += "\n"
             csockid.send(response.encode('utf-8'))
-            log_file.write(response)
-            log_file.flush()
+            responseFile.write(response)
+            responseFile.flush()
             csockid.close()
 
     except KeyboardInterrupt:
         print("Shutting down RS server.")
-    except socket.error as e:
-        print("Socket error:", e)
     finally:
-        log_file.close()
+        responseFile.close()
         ss.close()
         print("Server closed on port", port)
 
 if __name__ == "__main__":
     if len(sys.argv) != 2:
-        print("Usage: python3 {} <rudns_port>".format(sys.argv[0]))
+        print(f"Usage: python3 {sys.argv[0]} <port>")
         sys.exit(1)
     try:
-        port = int(sys.argv[1])
+        local_port = int(sys.argv[1])
     except ValueError:
-        print("Invalid port number")
+        print("Invalid port number.")
         sys.exit(1)
 
-    server()
+    server(local_port)

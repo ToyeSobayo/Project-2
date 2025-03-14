@@ -12,7 +12,6 @@ def loadTsDatabase(filename):
             parts = line.split()
             if len(parts) == 2:
                 domain, ip = parts
-                # Return original case for the domain along with its IP.
                 mapping[domain.lower()] = (domain, ip)
             else:
                 print("Error: Unexpected format", line)
@@ -20,17 +19,16 @@ def loadTsDatabase(filename):
     return mapping
 
 def ts1():
-    tsDB = loadTsDatabase("../testcases/ts1database.txt")
+    tsDB = loadTsDatabase("ts1database.txt")
     print("TS1 database loaded:", tsDB)
     
-    # Print the actual hostname and IP of TS1 to verify network configuration.
-    actual_hostname = socket.gethostname()
+    hostname = socket.gethostname()
     try:
-        actual_ip = socket.gethostbyname(actual_hostname)
+        ip = socket.gethostbyname(hostname)
     except Exception as e:
-        actual_ip = "Unknown"
-    print("TS1 running on hostname:", actual_hostname)
-    print("TS1 IP address:", actual_ip)
+        ip = "Unknown"
+    print("TS1 running on hostname:", hostname)
+    print("TS1 IP address:", ip)
     
     try:
         ss = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -44,7 +42,7 @@ def ts1():
     ss.listen(5)
     print("TS1 is up on port", port)
     
-    with open("../testcases/ts1responses.txt", "w") as file:
+    with open("ts1responses.txt", "w") as file:
         while True:
             try:
                 csockid, addr = ss.accept()
@@ -64,17 +62,17 @@ def ts1():
                     continue
                 
                 domain = parts[1]
-                req_id = parts[2]
+                reqId = parts[2]
                 
                 entry = tsDB.get(domain.lower())
                 if entry:
-                    og_domain, ip = entry
+                    originalDomain, ip = entry
                     flag = "aa"
                 else:
-                    og_domain = domain
+                    originalDomain = domain
                     ip = "0.0.0.0"
                     flag = "nx"
-                response = f"1 {og_domain} {ip} {req_id} {flag}\n"
+                response = f"1 {originalDomain} {ip} {reqId} {flag}\n"
 
                 csockid.send(response.encode('utf-8'))
                 
